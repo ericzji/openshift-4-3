@@ -228,7 +228,7 @@ In this example, we can see the following on worker node:
 - ARP reply is seen on tunnel interface
 - ARP reply NOT seen on physical interface
 
-### Solution
+## Solution
 
 "The issue lies with ovs flow rules which is not forwarding the traffic from node's tun0 interface to physical interface"
 
