@@ -21,7 +21,7 @@ Name Address HWaddress Vlan Expire-in-sec Status
 10.192.74.178 10.192.74.178 00:50:56:ac:d4:3f /Common/internal 42 resolved
 ```
  
-## Recommeded Actions
+## Recommended Actions
 
 **Example Topology**
 
