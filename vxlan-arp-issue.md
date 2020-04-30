@@ -1,8 +1,7 @@
-# OpenShift 4.3 Installation
 
-## How to troubleshoot VXLAN ARP issue
+# How to troubleshoot VXLAN ARP issue
 
-### Problem
+## Problem
 
 From BIG-IP, ARP records show that it's not able to resolve PODs mac address:
 
@@ -22,7 +21,7 @@ Name Address HWaddress Vlan Expire-in-sec Status
 10.192.74.178 10.192.74.178 00:50:56:ac:d4:3f /Common/internal 42 resolved
 ```
  
-### Recommeded Actions
+## Recommeded Actions
 
 **Example Topology**
 
