@@ -3,7 +3,7 @@
 
 ## Problem
 
-From BIG-IP, ARP records show that it's not able to resolve PODs mac address:
+The CIS is properly populating the pools, and OpenShift POD is up and running. From BIG-IP, however, ARP records show that it's not able to resolve PODs mac address:
 
 ```
 root@(bigip-a)(cfg-sync Standalone)(Active)(/Common)(tmos)# show net arp
@@ -34,11 +34,13 @@ PODs running on OpenShift 4.3:
 ```
 [eric@ns1 ~]$ oc get pod -o wide
 NAME                              READY   STATUS    RESTARTS   AGE    IP           NODE                                 NOMINATED NODE   READINESS GATES
-f5-hello-world-6df6fcf4fd-lskdb   1/1     Running   0          4d     10.131.1.185   worker0.ocp4-cluster-001.bddemo.io   <none>           <none>
-f5-hello-world-6df6fcf4fd-zpttc   1/1     Running   0          4d     10.131.1.187   worker0.ocp4-cluster-001.bddemo.io   <none>           <none>
+f5-hello-world-6df6fcf4fd-lskdb   1/1     Running   0          4d     10.131.0.185   worker0.ocp4-cluster-001.bddemo.io   <none>           <none>
+f5-hello-world-6df6fcf4fd-zpttc   1/1     Running   0          4d     10.131.0.187   worker0.ocp4-cluster-001.bddemo.io   <none>           <none>
 ```
 
 **Verify self-ip is reachable from OpenShift master**
+
+Verify that the internal network’s self IP is reachable from the cluster and pod with both ICMP and TCP traffic.
 
 Issue ping to BIG-IP Self-IP from Master:
 ```
@@ -142,7 +144,7 @@ IP 10.131.2.15.26103 > 10.131.0.224.webcache: Flags [.], ack 481, win 237, optio
 IP 10.131.2.15.26103 > 10.131.0.224.webcache: Flags [F.], seq 15, ack 481, win 237, options [nop,nop,TS val 2825023942 ecr 2871627055], length 0 out slot1/tmm0 lis=_wcard_tunnel_/Common/openshift-vxlan
 ```
 
-From above, we can see that ARP request is sent out, but without ARP reply.
+From above, it shows the self IP requesting the mac address of the pod but not getting a response.
 
 **Install TCPDUMP tool on work node**
 
@@ -171,8 +173,12 @@ Verify ARP REQUEST is received by work node, and also work node is sending the R
 On worker node, tcpdump first on tunnel interface:
 ```
 [root@worker0 /]# tcpdump -ni tun0 host 10.131.2.15
+TO BE ADDED
+...
 
 ```
+It appears the worker node is properly passing the encapsulated ARP requests and replied.
+
 
 On worker node, tcpdump on physical interface:
 ```
@@ -228,9 +234,11 @@ In this example, we can see the following on worker node:
 - ARP reply is seen on tunnel interface
 - ARP reply NOT seen on physical interface
 
+It means the packet stops at worker node. "The issue lies with ovs flow rules which is not forwarding the traffic from node's tun0 interface to physical interface"
+
 ## Solution
 
-"The issue lies with ovs flow rules which is not forwarding the traffic from node's tun0 interface to physical interface"
+
 
 The solution is to restart ovs POD on workder node, which is managed by SDN-controller:
 ```
