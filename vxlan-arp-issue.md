@@ -27,12 +27,20 @@ Name Address HWaddress Vlan Expire-in-sec Status
 
                                             BIGIP NW                                                                 CLUSTER NW
                                 Openshift (Self)       Internal Self                                      Openshift Node.        Backend Pod
-                                10.131.2.15            10.192.74.189  ------------------------------------10.192.74.177          10.129.0.185
+                                10.131.2.15            10.192.74.189  ------------------------------------10.192.74.177          10.131.0.185
  
+
+PODs running on OpenShift 4.3:
+```
+[eric@ns1 ~]$ oc get pod -o wide
+NAME                              READY   STATUS    RESTARTS   AGE    IP           NODE                                 NOMINATED NODE   READINESS GATES
+f5-hello-world-6df6fcf4fd-lskdb   1/1     Running   0          4d     10.131.1.185   worker0.ocp4-cluster-001.bddemo.io   <none>           <none>
+f5-hello-world-6df6fcf4fd-zpttc   1/1     Running   0          4d     10.131.1.187   worker0.ocp4-cluster-001.bddemo.io   <none>           <none>
+```
 
 **Verify self-ip is reachable from OpenShift master**
 
- ping Self-ip on BIG-IP from Master:
+Issue ping to BIG-IP Self-IP from Master:
 ```
 [root@master0 ~]# ping 10.131.2.15
 PING 10.131.2.15 (10.131.2.15) 56(84) bytes of data.
@@ -42,8 +50,7 @@ PING 10.131.2.15 (10.131.2.15) 56(84) bytes of data.
 ```
  
 
-**Verify** 
-...
+**Verify routing on BIG-IP** 
 
 ```
 root@(bigip-a)(cfg-sync Standalone)(Active)(/Common)(tmos)# show net route
@@ -70,7 +77,74 @@ ff02::/64 ff02::/64 interface tmm connected
 fe80::/64 fe80::/64 interface tmm connected
 ```
 
-**Verify**
+**TCPDUMP to capture traffic on BIG-IP**
+
+
+On BIG-IP, issue ping to POD:
+```
+root@(bigip-a)(cfg-sync Standalone)(LICENSE EXPIRES IN 4 DAYS:Active)(/Common)(tmos)# ping 10.131.0.185
+PING 10.131.0.185 (10.131.0.185) 56(84) bytes of data.
+From 10.131.0.185 icmp_seq=3 Destination Host Unreachable
+From 10.131.0.185 icmp_seq=4 Destination Host Unreachable
+From 10.131.0.185 icmp_seq=5 Destination Host Unreachable
+From 10.131.0.185 icmp_seq=6 Destination Host Unreachable
+```
+
+TCPDUMP on vxlan interface:
+```
+[root@bigip-a:Active:Standalone] config # tcpdump -ni openshift-vxlan
+tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
+listening on openshift-vxlan, link-type EN10MB (Ethernet), capture size 65535 bytes
+
+11:54:56.193272 IP 10.131.2.15.57488 > 10.131.0.224.webcache: Flags [S], seq 4068912808, win 29200, options [mss 1460,sackOK,TS val 2825163968 ecr 0,nop,wscale 7], length 0 out slot1/tmm0 lis=
+11:54:56.193871 IP 10.131.0.224.webcache > 10.131.2.15.57488: Flags [S.], seq 1492491491, ack 4068912809, win 27960, options [mss 1410,sackOK,TS val 2871767082 ecr 2825163968,nop,wscale 7], length 0 in slot1/tmm0 lis=
+11:54:56.194143 IP 10.131.2.15.57488 > 10.131.0.224.webcache: Flags [.], ack 1, win 229, options [nop,nop,TS val 2825163968 ecr 2871767082], length 0 out slot1/tmm0 lis=
+11:54:56.194211 IP 10.131.2.15.57488 > 10.131.0.224.webcache: Flags [P.], seq 1:15, ack 1, win 229, options [nop,nop,TS val 2825163969 ecr 2871767082], length 14: HTTP out slot1/tmm0 lis=
+11:54:56.194417 IP 10.131.0.224.webcache > 10.131.2.15.57488: Flags [.], ack 15, win 219, options [nop,nop,TS val 2871767083 ecr 2825163969], length 0 in slot1/tmm0 lis=
+11:54:56.194727 IP 10.131.0.224.webcache > 10.131.2.15.57488: Flags [P.], seq 1:481, ack 15, win 219, options [nop,nop,TS val 2871767083 ecr 2825163969], length 480: HTTP: HTTP/1.1 400 Bad Request in slot1/tmm0 lis=
+11:54:56.194960 IP 10.131.2.15.57488 > 10.131.0.224.webcache: Flags [.], ack 481, win 237, options [nop,nop,TS val 2825163969 ecr 2871767083], length 0 out slot1/tmm0 lis=
+11:54:56.195038 IP 10.131.2.15.57488 > 10.131.0.224.webcache: Flags [F.], seq 15, ack 481, win 237, options [nop,nop,TS val 2825163969 ecr 2871767083], length 0 out slot1/tmm0 lis=
+11:54:56.195109 IP 10.131.0.224.webcache > 10.131.2.15.57488: Flags [F.], seq 481, ack 15, win 219, options [nop,nop,TS val 2871767083 ecr 2825163969], length 0 in slot1/tmm0 lis=
+11:54:56.195304 IP 10.131.2.15.57488 > 10.131.0.224.webcache: Flags [.], ack 482, win 237, options [nop,nop,TS val 2825163970 ecr 2871767083], length 0 out slot1/tmm0 lis=
+11:54:56.195380 IP 10.131.0.224.webcache > 10.131.2.15.57488: Flags [.], ack 16, win 219, options [nop,nop,TS val 2871767084 ecr 2825163969], length 0 in slot1/tmm0 lis=
+11:54:58.672503 IP 10.131.2.15.45168 > 10.131.0.223.webcache: Flags [S], seq 3268459781, win 29200, options [mss 1460,sackOK,TS val 2825166447 ecr 0,nop,wscale 7], length 0 out slot1/tmm0 lis=
+11:54:58.672901 IP 10.131.0.223.webcache > 10.131.2.15.45168: Flags [S.], seq 1013539685, ack 3268459782, win 27960, options [mss 1410,sackOK,TS val 671469688 ecr 2825166447,nop,wscale 7], length 0 in slot1/tmm2 lis=
+11:54:58.673334 IP 10.131.2.15.45168 > 10.131.0.223.webcache: Flags [.], ack 1, win 229, options [nop,nop,TS val 2825166448 ecr 671469688], length 0 out slot1/tmm0 lis=
+11:54:58.673546 IP 10.131.2.15.45168 > 10.131.0.223.webcache: Flags [P.], seq 1:15, ack 1, win 229, options [nop,nop,TS val 2825166448 ecr 671469688], length 14: HTTP out slot1/tmm0 lis=
+11:54:58.673838 IP 10.131.0.223.webcache > 10.131.2.15.45168: Flags [.], ack 15, win 219, options [nop,nop,TS val 671469689 ecr 2825166448], length 0 in slot1/tmm2 lis=
+11:54:58.673979 IP 10.131.0.223.webcache > 10.131.2.15.45168: Flags [P.], seq 1:481, ack 15, win 219, options [nop,nop,TS val 671469689 ecr 2825166448], length 480: HTTP: HTTP/1.1 400 Bad Request in slot1/tmm2 lis=
+11:54:58.673994 IP 10.131.0.223.webcache > 10.131.2.15.45168: Flags [F.], seq 481, ack 15, win 219, options [nop,nop,TS val 671469690 ecr 2825166448], length 0 in slot1/tmm2 lis=
+11:54:58.674120 IP 10.131.2.15.45168 > 10.131.0.223.webcache: Flags [.], ack 481, win 237, options [nop,nop,TS val 2825166449 ecr 671469689], length 0 out slot1/tmm0 lis=
+```
+
+TCPDUMP on physical interface  (internal):
+```
+[root@bigip-a:Active:Standalone] config # tcpdump -ni internal host 10.192.74.189 | grep vxlan
+tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
+listening on internal, link-type EN10MB (Ethernet), capture size 65535 bytes
+IP 10.131.2.15.32151 > 10.131.0.223.webcache: Flags [S], seq 2336954648, win 29200, options [mss 1460,sackOK,TS val 2825021461 ecr 0,nop,wscale 7], length 0 out slot1/tmm0 lis=_wcard_tunnel_/Common/openshift-vxlan
+IP 10.131.2.15.32151 > 10.131.0.223.webcache: Flags [.], ack 1, win 229, options [nop,nop,TS val 2825021462 ecr 671324702], length 0 out slot1/tmm0 lis=_wcard_tunnel_/Common/openshift-vxlan
+IP 10.131.2.15.32151 > 10.131.0.223.webcache: Flags [P.], seq 1:15, ack 1, win 229, options [nop,nop,TS val 2825021462 ecr 671324702], length 14: HTTP out slot1/tmm0 lis=_wcard_tunnel_/Common/openshift-vxlan
+IP 10.131.0.223.webcache > 10.131.2.15.32151: Flags [.], ack 15, win 219, options [nop,nop,TS val 671324703 ecr 2825021462], length 0 in slot1/tmm3 lis=_wcard_tunnel_/Common/openshift-vxlan
+IP 10.131.0.223.webcache > 10.131.2.15.32151: Flags [P.], seq 1:481, ack 15, win 219, options [nop,nop,TS val 671324703 ecr 2825021462], length 480: HTTP: HTTP/1.1 400 Bad Request in slot1/tmm3 lis=_wcard_tunnel_/Common/openshift-vxlan
+IP 10.131.0.223.webcache > 10.131.2.15.32151: Flags [F.], seq 481, ack 15, win 219, options [nop,nop,TS val 671324703 ecr 2825021462], length 0 in slot1/tmm3 lis=_wcard_tunnel_/Common/openshift-vxlan
+IP 10.131.2.15.32151 > 10.131.0.223.webcache: Flags [.], ack 481, win 237, options [nop,nop,TS val 2825021463 ecr 671324703], length 0 out slot1/tmm0 lis=_wcard_tunnel_/Common/openshift-vxlan
+IP 10.131.2.15.32151 > 10.131.0.223.webcache: Flags [F.], seq 15, ack 481, win 237, options [nop,nop,TS val 2825021463 ecr 671324703], length 0 out slot1/tmm0 lis=_wcard_tunnel_/Common/openshift-vxlan
+IP 10.131.2.15.32151 > 10.131.0.223.webcache: Flags [.], ack 482, win 237, options [nop,nop,TS val 2825021463 ecr 671324703], length 0 out slot1/tmm0 lis=_wcard_tunnel_/Common/openshift-vxlan
+IP 10.131.0.223.webcache > 10.131.2.15.32151: Flags [.], ack 16, win 219, options [nop,nop,TS val 671324703 ecr 2825021463], length 0 in slot1/tmm3 lis=_wcard_tunnel_/Common/openshift-vxlan
+IP 10.131.2.15.26103 > 10.131.0.224.webcache: Flags [S], seq 3246220929, win 29200, options [mss 1460,sackOK,TS val 2825023941 ecr 0,nop,wscale 7], length 0 out slot1/tmm0 lis=_wcard_tunnel_/Common/openshift-vxlan
+IP 10.131.2.15.26103 > 10.131.0.224.webcache: Flags [.], ack 1, win 229, options [nop,nop,TS val 2825023942 ecr 2871627055], length 0 out slot1/tmm0 lis=_wcard_tunnel_/Common/openshift-vxlan
+IP 10.131.2.15.26103 > 10.131.0.224.webcache: Flags [P.], seq 1:15, ack 1, win 229, options [nop,nop,TS val 2825023942 ecr 2871627055], length 14: HTTP out slot1/tmm0 lis=_wcard_tunnel_/Common/openshift-vxlan
+IP 10.131.0.224.webcache > 10.131.2.15.26103: Flags [.], ack 15, win 219, options [nop,nop,TS val 2871627055 ecr 2825023942], length 0 in slot1/tmm0 lis=_wcard_tunnel_/Common/openshift-vxlan
+IP 10.131.0.224.webcache > 10.131.2.15.26103: Flags [P.], seq 1:481, ack 15, win 219, options [nop,nop,TS val 2871627055 ecr 2825023942], length 480: HTTP: HTTP/1.1 400 Bad Request in slot1/tmm0 lis=_wcard_tunnel_/Common/openshift-vxlan
+IP 10.131.0.224.webcache > 10.131.2.15.26103: Flags [F.], seq 481, ack 15, win 219, options [nop,nop,TS val 2871627055 ecr 2825023942], length 0 in slot1/tmm0 lis=_wcard_tunnel_/Common/openshift-vxlan
+IP 10.131.2.15.26103 > 10.131.0.224.webcache: Flags [.], ack 481, win 237, options [nop,nop,TS val 2825023942 ecr 2871627055], length 0 out slot1/tmm0 lis=_wcard_tunnel_/Common/openshift-vxlan
+IP 10.131.2.15.26103 > 10.131.0.224.webcache: Flags [F.], seq 15, ack 481, win 237, options [nop,nop,TS val 2825023942 ecr 2871627055], length 0 out slot1/tmm0 lis=_wcard_tunnel_/Common/openshift-vxlan
+```
+
+From above, we can see that ARP request is sent out, but without ARP reply.
+
+**Install TCPDUMP tool on work node**
 
 Install TCPDUMP on worker node:
 ```
@@ -88,19 +162,19 @@ Complete!
 [root@worker0 /]# tcpdump -ni tun0
 ```
 
-tcpdump on tunnel interface:
+**Tcpdump to capture traffic on OpenShift worker node**
+
+
+Verify ARP REQUEST is received by work node, and also work node is sending the RESPONSE back.
+
+
+On worker node, tcpdump first on tunnel interface:
 ```
 [root@worker0 /]# tcpdump -ni tun0 host 10.131.2.15
 
-[root@worker0 /]# tcpdump -ni tun0 host 10.131.2.15
-[root@worker0 /]# tcpdump -ni ens192 host 10.192.74.189
-[root@worker0 /]# tcpdump -ni ens192 | grep -B 1 -A 1 10.131.0.185
-[root@worker0 /]# tcpdump -ni ens192 | grep -i -B 1 -A 1 reply
-[root@worker0 /]# tcpdump -ni ens192 | grep -i -B 2 -A 2 reply
-
 ```
 
-tcpdump on physical interface:
+On worker node, tcpdump on physical interface:
 ```
 [root@worker0 /]# tcpdump -ni ens192 | grep -i -B 2 -A 2 10.131.0.185
 tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
@@ -144,13 +218,38 @@ ARP, Request who-has 10.131.0.187 tell 10.131.2.15, length 46
 ARP, Request who-has 10.131.0.185 tell 10.131.2.15, length 46
 03:45:08.116198 IP 10.192.74.178.54607 > 10.192.74.177.vxlan: VXLAN, flags [I] (0x08), vni 9267632
 IP 10.129.0.254.42216 > 10.131.0.11.9095: Flags [P.], seq 353932834:353934086, ack 3087874079, win 1393, options [nop,nop,TS val 980078976 ecr 1418219764], length 1252
-```
-### Solution
+
+[root@worker0 /]# tcpdump -ni ens192 | grep -i -B 1 -A 1 reply
+[root@worker0 /]# tcpdump -ni ens192 | grep -i -B 2 -A 2 reply
 
 ```
-root@master0 working]# oc get pods -n openshift-sdn
-[root@master0 working]# oc get pods -n openshift-sdn -o wide
-[root@master0 working]# oc delete pod ovs-2fm5n -n openshift-sdn
-pod "ovs-2fm5n" deleted
-[root@master0 working]# oc get pods -n openshift-sdn
+
+In this example, we can see the following on worker node:
+- ARP reply is seen on tunnel interface
+- ARP reply NOT seen on physical interface
+
+### Solution
+
+"The issue lies with ovs flow rules which is not forwarding the traffic from node's tun0 interface to physical interface"
+
+The solution is to restart ovs POD on workder node, which is managed by SDN-controller:
 ```
+[root@master0 working]# oc get pods -n openshift-sdn -o wide
+[eric@ns1 ~]$ oc get pods -n openshift-sdn -o wide
+NAME                   READY   STATUS    RESTARTS   AGE   IP              NODE                                 NOMINATED NODE   READINESS GATES
+ovs-6cp2g              1/1     Running   2          44d   10.192.74.174   master0.ocp4-cluster-001.bddemo.io   <none>           <none>
+ovs-kdz2g              1/1     Running   0          14d   10.192.74.178   worker1.ocp4-cluster-001.bddemo.io   <none>           <none>
+ovs-r4v78              1/1     Running   0          14d   10.192.74.177   worker0.ocp4-cluster-001.bddemo.io   <none>           <none>
+ovs-rp4nn              1/1     Running   0          44d   10.192.74.175   master1.ocp4-cluster-001.bddemo.io   <none>           <none>
+ovs-x72jn              1/1     Running   0          44d   10.192.74.176   master2.ocp4-cluster-001.bddemo.io   <none>           <none>
+sdn-5t96p              1/1     Running   7          44d   10.192.74.174   master0.ocp4-cluster-001.bddemo.io   <none>           <none>
+sdn-bbpgg              1/1     Running   1          44d   10.192.74.176   master2.ocp4-cluster-001.bddemo.io   <none>           <none>
+sdn-bd9cz              1/1     Running   2          44d   10.192.74.177   worker0.ocp4-cluster-001.bddemo.io   <none>           <none>
+sdn-bgsj7              1/1     Running   1          44d   10.192.74.175   master1.ocp4-cluster-001.bddemo.io   <none>           <none>
+sdn-controller-6t9mg   1/1     Running   22         44d   10.192.74.176   master2.ocp4-cluster-001.bddemo.io   <none>           <none>
+sdn-controller-7wbwg   1/1     Running   24         44d   10.192.74.175   master1.ocp4-cluster-001.bddemo.io   <none>           <none>
+sdn-controller-p546q   1/1     Running   18         44d   10.192.74.174   master0.ocp4-cluster-001.bddemo.io   <none>           <none>
+sdn-vcvjb              1/1     Running   4          44d   10.192.74.178   worker1.ocp4-cluster-001.bddemo.io   <none>           <none>
+[eric@ns1 ~]$ oc delete pod ovs-r4v78 -n openshift-sdn
+pod "ovs-r4v78" deleted
+
